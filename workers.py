@@ -14,12 +14,12 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-np.clip(z, -30, 30)))
 
 
-def prepare_shard(path, shard_id, out_dir, features, sample_frac=1.0, threshold=5.0, seed=4207):
+def prepare_shard(path, shard_id, out_dir, features, threshold=0.0):
     """Clean one monthly file, split it 70/15/15 and save it as .npy files."""
-    cols = ["fare_amount", "trip_distance", "passenger_count", "tpep_pickup_datetime", "tpep_dropoff_datetime", "tip_amount"]
+    cols = ["fare_amount", "trip_distance", "passenger_count", "tpep_pickup_datetime", "tpep_dropoff_datetime", "tip_amount", "payment_type"]
     t = pd.read_parquet(path, columns=cols)
-    # Column pruning (meter errors e.g. zero-distance trips, zero/negative duration trips, etc.)
-    t = t[(t.fare_amount > 0) & (t.trip_distance > 0) & (t.trip_distance < 100) & (t.tpep_dropoff_datetime > t.tpep_pickup_datetime) & (t.tip_amount < 100) & (t.tip_amount >= 0)].copy()
+    # Column pruning (card trips only, meter errors e.g. zero-distance trips, zero/negative duration trips, etc.)
+    t = t[(t.payment_type == 1) & (t.fare_amount > 0) & (t.trip_distance > 0) & (t.trip_distance < 100) & (t.tpep_dropoff_datetime > t.tpep_pickup_datetime) & (t.tip_amount < 100) & (t.tip_amount >= 0)].copy()
     # Sort values by time
     t = t.sort_values("tpep_pickup_datetime").reset_index(drop=True)
     t["pickup_hour"] = t.tpep_pickup_datetime.dt.hour
