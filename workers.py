@@ -1,3 +1,4 @@
+"""Functions that run inside the worker processes."""
 import os
 os.environ["OMP_NUM_THREADS"] = "1"        # one maths thread per process, so workers do not fight over cores
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
