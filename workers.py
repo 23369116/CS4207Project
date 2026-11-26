@@ -1,4 +1,4 @@
-"""Functions that run inside the worker processes."""
+"""Functions that run inside the worker processes (CS4207 Week 9 lab)."""
 import os
 os.environ["OMP_NUM_THREADS"] = "1"        # one maths thread per process, so workers do not fight over cores
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -18,27 +18,33 @@ def prepare_shard(path, shard_id, out_dir, features, sample_frac=1.0, threshold=
     """Clean one monthly file, split it 70/15/15 and save it as .npy files."""
     cols = ["fare_amount", "trip_distance", "passenger_count", "tpep_pickup_datetime", "tpep_dropoff_datetime"]
     t = pd.read_parquet(path, columns=cols)
+    # Column pruning (meter errors e.g. zero-distance trips, zero/negative duration trips, etc.)
     t = t[(t.fare_amount > 0) & (t.trip_distance > 0) & (t.trip_distance < 100) & (t.tpep_dropoff_datetime > t.tpep_pickup_datetime)].copy()
+    # Sort values by time
+    t = t.sort_values("tpep_pickup_datetime").reset_index(drop=True)
     t["pickup_hour"] = t.tpep_pickup_datetime.dt.hour
+    # Drop invalid values on the caller's features list
     t = t.dropna(subset=features)
     X = t[features].to_numpy(dtype=float)
+    # Assign truth labels to dataset
     y = (t.fare_amount > threshold).to_numpy(dtype=float)
 
-    # Seed depends on the shard id, so every run gives the same split
-    order = np.random.default_rng(seed + shard_id).permutation(len(y))
-    order = order[:int(sample_frac * len(y))]      # use a fixed random sample of the rows
-    n_train, n_val = int(0.70 * len(order)), int(0.15 * len(order))
-    parts = {"train": order[:n_train],
-             "val": order[n_train:n_train + n_val],
-             "test": order[n_train + n_val:]}
+    # Time-based train/test split
+    n_total = len(y)
+    n_train = int(0.70 * n_total)
+    n_val = int(0.15 * n_total)
+    parts = {
+        "train": np.arange(0, n_train),
+        "val": np.arange(n_train, n_train + n_val),
+        "test": np.arange(n_train + n_val, n_total)
+    }
     for split, idx in parts.items():
         np.save(f"{out_dir}/s{shard_id:02d}_{split}_rawX.npy", X[idx])
         np.save(f"{out_dir}/s{shard_id:02d}_{split}_y.npy", y[idx])
 
     Xtr = X[parts["train"]]
     return {"n": len(Xtr), "sum": Xtr.sum(axis=0), "sumsq": (Xtr ** 2).sum(axis=0),
-            "rows_kept": len(order)}
-
+            "rows_kept": n_total}
 
 def scale_shard(shard_id, out_dir, mean, std):
     """Standardise one shard using the mean and std from the TRAINING data only."""
