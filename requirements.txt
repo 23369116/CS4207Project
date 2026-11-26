@@ -1,0 +1,8 @@
+numpy
+pandas
+pyarrow
+scikit-learn
+matplotlib
+psutil
+threadpoolctl
+jupyter
