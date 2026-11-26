@@ -14,12 +14,12 @@ def sigmoid(z):
     return 1 / (1 + np.exp(-np.clip(z, -30, 30)))
 
 
-def prepare_shard(path, shard_id, out_dir, features, sample_frac=1.0, threshold=20.0, seed=4207):
+def prepare_shard(path, shard_id, out_dir, features, sample_frac=1.0, threshold=5.0, seed=4207):
     """Clean one monthly file, split it 70/15/15 and save it as .npy files."""
-    cols = ["fare_amount", "trip_distance", "passenger_count", "tpep_pickup_datetime", "tpep_dropoff_datetime"]
+    cols = ["fare_amount", "trip_distance", "passenger_count", "tpep_pickup_datetime", "tpep_dropoff_datetime", "tip_amount"]
     t = pd.read_parquet(path, columns=cols)
     # Column pruning (meter errors e.g. zero-distance trips, zero/negative duration trips, etc.)
-    t = t[(t.fare_amount > 0) & (t.trip_distance > 0) & (t.trip_distance < 100) & (t.tpep_dropoff_datetime > t.tpep_pickup_datetime)].copy()
+    t = t[(t.fare_amount > 0) & (t.trip_distance > 0) & (t.trip_distance < 100) & (t.tpep_dropoff_datetime > t.tpep_pickup_datetime) & (t.tip_amount < 100) & (t.tip_amount >= 0)].copy()
     # Sort values by time
     t = t.sort_values("tpep_pickup_datetime").reset_index(drop=True)
     t["pickup_hour"] = t.tpep_pickup_datetime.dt.hour
@@ -27,7 +27,7 @@ def prepare_shard(path, shard_id, out_dir, features, sample_frac=1.0, threshold=
     t = t.dropna(subset=features)
     X = t[features].to_numpy(dtype=float)
     # Assign truth labels to dataset
-    y = (t.fare_amount > threshold).to_numpy(dtype=float)
+    y = (t.tip_amount > threshold).to_numpy(dtype=float)
 
     # Time-based train/test split
     n_total = len(y)
